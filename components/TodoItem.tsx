@@ -1,10 +1,8 @@
+"use client";
+
 import { useState } from "react";
-import {
-  View, Text, TouchableOpacity, StyleSheet, TextInput,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Todo } from "@/lib/types";
-import { colors, fontSize, radius, spacing } from "@/lib/theme";
+import { Trash2, Pencil, Check, X, Calendar, Tag } from "lucide-react";
+import { Todo, Priority } from "@/lib/types";
 
 interface TodoItemProps {
   todo: Todo;
@@ -14,173 +12,174 @@ interface TodoItemProps {
 }
 
 const priorityConfig = {
-  high:   { label: "High",   color: colors.danger,        dot: colors.priorityHigh },
-  medium: { label: "Med",    color: colors.warning,       dot: colors.priorityMedium },
-  low:    { label: "Low",    color: colors.success,       dot: colors.priorityLow },
+  high: { label: "High", dot: "#ff4757", class: "priority-high" },
+  medium: { label: "Med", dot: "#ffa502", class: "priority-medium" },
+  low: { label: "Low", dot: "#2ed573", class: "priority-low" },
 };
 
-function isOverdue(dueDate?: string, completed?: boolean) {
-  if (!dueDate || completed) return false;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return new Date(dueDate + "T00:00:00") < today;
+function isOverdue(dueDate?: string) {
+  if (!dueDate) return false;
+  return new Date(dueDate) < new Date(new Date().toDateString());
 }
 
 export default function TodoItem({ todo, onToggle, onDelete, onUpdate }: TodoItemProps) {
   const [editing, setEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(todo.title);
   const [editDesc, setEditDesc] = useState(todo.description || "");
+  const [deleting, setDeleting] = useState(false);
 
+  const overdue = isOverdue(todo.due_date) && !todo.completed;
   const pc = priorityConfig[todo.priority];
-  const overdue = isOverdue(todo.due_date, todo.completed);
 
-  function saveEdit() {
+  function handleSave() {
     if (!editTitle.trim()) return;
-    onUpdate(todo.id, { title: editTitle.trim(), description: editDesc.trim() || undefined });
+    onUpdate(todo.id, {
+      title: editTitle.trim(),
+      description: editDesc.trim() || undefined,
+    });
     setEditing(false);
   }
 
+  async function handleDelete() {
+    setDeleting(true);
+    await onDelete(todo.id);
+  }
+
   function formatDate(d: string) {
-    return new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return new Date(d + "T00:00:00").toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
   }
 
   return (
-    <View style={[styles.card, todo.completed && styles.cardDone, { borderLeftColor: pc.dot }]}>
+    <div
+      className={`todo-card ${todo.completed ? "completed" : ""} animate-fade-in`}
+      style={{
+        opacity: deleting ? 0 : undefined,
+        transition: "opacity 0.3s, transform 0.2s, border-color 0.2s, box-shadow 0.2s",
+        borderLeft: `3px solid ${pc.dot}`,
+      }}
+    >
       {editing ? (
-        <View>
-          <TextInput
-            style={styles.editInput}
+        <div className="space-y-2">
+          <input
+            type="text"
             value={editTitle}
-            onChangeText={setEditTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            className="input-field text-sm"
             autoFocus
-            onSubmitEditing={saveEdit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleSave();
+              if (e.key === "Escape") setEditing(false);
+            }}
           />
-          <TextInput
-            style={[styles.editInput, styles.editDesc]}
+          <textarea
             value={editDesc}
-            onChangeText={setEditDesc}
+            onChange={(e) => setEditDesc(e.target.value)}
+            className="input-field text-sm resize-none"
+            rows={2}
             placeholder="Description..."
-            placeholderTextColor={colors.muted}
-            multiline
+            style={{ fontFamily: "'DM Sans', sans-serif" }}
           />
-          <View style={styles.editActions}>
-            <TouchableOpacity onPress={saveEdit} style={styles.saveBtn}>
-              <Text style={styles.saveBtnText}>Save</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setEditing(false)} style={styles.cancelBtn}>
-              <Text style={styles.cancelBtnText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1"
+            >
+              <Check size={12} /> Save
+            </button>
+            <button
+              onClick={() => setEditing(false)}
+              className="btn-ghost text-xs py-1.5 px-3 flex items-center gap-1"
+            >
+              <X size={12} /> Cancel
+            </button>
+          </div>
+        </div>
       ) : (
-        <View style={styles.row}>
-          {/* Checkbox */}
-          <TouchableOpacity
-            onPress={() => onToggle(todo.id, todo.completed)}
-            style={[styles.checkbox, todo.completed && styles.checkboxDone]}
-            activeOpacity={0.7}
-          >
-            {todo.completed && <Ionicons name="checkmark" size={12} color={colors.obsidian} />}
-          </TouchableOpacity>
+        <div className="flex items-start gap-3">
+          <input
+            type="checkbox"
+            checked={todo.completed}
+            onChange={() => onToggle(todo.id, todo.completed)}
+            className="custom-checkbox mt-0.5"
+          />
 
-          {/* Content */}
-          <View style={styles.content}>
-            <Text style={[styles.title, todo.completed && styles.titleDone]} numberOfLines={2}>
+          <div className="flex-1 min-w-0">
+            <p
+              className="text-sm font-medium leading-snug"
+              style={{
+                color: todo.completed ? "var(--muted)" : "var(--soft)",
+                textDecoration: todo.completed ? "line-through" : "none",
+              }}
+            >
               {todo.title}
-            </Text>
-            {todo.description ? (
-              <Text style={styles.desc} numberOfLines={1}>{todo.description}</Text>
-            ) : null}
+            </p>
 
-            {/* Meta */}
-            <View style={styles.meta}>
-              <View style={[styles.priorityBadge, { backgroundColor: `${pc.dot}18`, borderColor: `${pc.dot}30` }]}>
-                <Text style={[styles.priorityText, { color: pc.color }]}>{pc.label}</Text>
-              </View>
-              {todo.category ? (
-                <View style={styles.tag}>
-                  <Ionicons name="pricetag-outline" size={9} color={colors.muted} />
-                  <Text style={styles.tagText}>{todo.category}</Text>
-                </View>
-              ) : null}
-              {todo.due_date ? (
-                <View style={styles.dateTag}>
-                  <Ionicons name="calendar-outline" size={9} color={overdue ? colors.danger : colors.muted} />
-                  <Text style={[styles.dateText, overdue && styles.dateTextOverdue]}>
-                    {overdue ? "Overdue · " : ""}{formatDate(todo.due_date)}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-          </View>
+            {todo.description && (
+              <p
+                className="text-xs mt-0.5 leading-relaxed"
+                style={{ color: "var(--muted)" }}
+              >
+                {todo.description}
+              </p>
+            )}
+
+            <div className="flex items-center gap-2 mt-2 flex-wrap">
+              {/* Priority badge */}
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full ${pc.class}`}
+                style={{ fontFamily: "'JetBrains Mono', monospace" }}
+              >
+                {pc.label}
+              </span>
+
+              {/* Category */}
+              {todo.category && (
+                <span className="tag-pill flex items-center gap-1">
+                  <Tag size={9} />
+                  {todo.category}
+                </span>
+              )}
+
+              {/* Due date */}
+              {todo.due_date && (
+                <span
+                  className="text-xs flex items-center gap-1"
+                  style={{ color: overdue ? "var(--danger)" : "var(--muted)" }}
+                >
+                  <Calendar size={10} />
+                  {overdue ? "Overdue · " : ""}
+                  {formatDate(todo.due_date)}
+                </span>
+              )}
+            </div>
+          </div>
 
           {/* Actions */}
-          <View style={styles.actions}>
-            <TouchableOpacity onPress={() => setEditing(true)} style={styles.actionBtn}>
-              <Ionicons name="pencil-outline" size={15} color={colors.muted} />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => onDelete(todo.id)} style={styles.actionBtn}>
-              <Ionicons name="trash-outline" size={15} color={colors.muted} />
-            </TouchableOpacity>
-          </View>
-        </View>
+          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-1"
+            style={{ opacity: 1 }}
+          >
+            <button
+              onClick={() => setEditing(true)}
+              className="p-1.5 rounded-lg transition-colors hover:bg-white/5"
+              style={{ color: "var(--muted)" }}
+              title="Edit"
+            >
+              <Pencil size={14} />
+            </button>
+            <button
+              onClick={handleDelete}
+              className="p-1.5 rounded-lg transition-colors hover:bg-red-500/10"
+              style={{ color: "var(--muted)" }}
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        </div>
       )}
-    </View>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: radius.md,
-    borderWidth: 1, borderColor: colors.border,
-    borderLeftWidth: 3,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  cardDone: { opacity: 0.5 },
-  row: { flexDirection: "row", alignItems: "flex-start", gap: spacing.sm },
-  checkbox: {
-    width: 20, height: 20, borderRadius: 6,
-    borderWidth: 2, borderColor: colors.border,
-    alignItems: "center", justifyContent: "center",
-    marginTop: 2, flexShrink: 0,
-  },
-  checkboxDone: { backgroundColor: colors.accent, borderColor: colors.accent },
-  content: { flex: 1 },
-  title: { fontSize: fontSize.sm, fontWeight: "500", color: colors.soft, lineHeight: 20 },
-  titleDone: { textDecorationLine: "line-through", color: colors.muted },
-  desc: { fontSize: fontSize.xs, color: colors.muted, marginTop: 2 },
-  meta: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing.xs, marginTop: spacing.xs },
-  priorityBadge: {
-    paddingHorizontal: 7, paddingVertical: 2,
-    borderRadius: radius.full, borderWidth: 1,
-  },
-  priorityText: { fontSize: 10, fontWeight: "600", fontFamily: "monospace" },
-  tag: { flexDirection: "row", alignItems: "center", gap: 3 },
-  tagText: { fontSize: 10, color: colors.muted },
-  dateTag: { flexDirection: "row", alignItems: "center", gap: 3 },
-  dateText: { fontSize: 10, color: colors.muted },
-  dateTextOverdue: { color: colors.danger },
-  actions: { flexDirection: "column", gap: spacing.xs },
-  actionBtn: { padding: 4 },
-  editInput: {
-    backgroundColor: colors.surface,
-    borderWidth: 1, borderColor: colors.border,
-    borderRadius: radius.sm, padding: spacing.sm,
-    color: colors.soft, fontSize: fontSize.sm, marginBottom: spacing.sm,
-  },
-  editDesc: { minHeight: 50, textAlignVertical: "top" },
-  editActions: { flexDirection: "row", gap: spacing.sm },
-  saveBtn: {
-    flex: 1, backgroundColor: colors.accent,
-    borderRadius: radius.sm, padding: spacing.sm, alignItems: "center",
-  },
-  saveBtnText: { color: colors.obsidian, fontWeight: "700", fontSize: fontSize.xs },
-  cancelBtn: {
-    flex: 1, backgroundColor: colors.surface,
-    borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border,
-    padding: spacing.sm, alignItems: "center",
-  },
-  cancelBtnText: { color: colors.muted, fontSize: fontSize.xs },
-});

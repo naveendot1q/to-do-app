@@ -1,219 +1,306 @@
-import { useState, useRef } from "react";
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Platform } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { colors, fontSize, radius, spacing } from "@/lib/theme";
+"use client";
+
+import { useState, useRef, useEffect } from "react";
+import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
 
 interface DateBrowserProps {
-  selectedDate: string | null;
+  selectedDate: string | null; // "YYYY-MM-DD" or null = all
   onDateSelect: (date: string | null) => void;
   taskCountsByDate: Record<string, { total: number; completed: number }>;
-  todayStr: string;
 }
 
-function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return toStr(d);
-}
-
-function toStr(date: Date): string {
+function toLocalDateStr(date: Date) {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
   const d = String(date.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
 }
 
-function getMondayOf(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00");
-  const day = d.getDay();
-  d.setDate(d.getDate() - ((day + 6) % 7));
-  return toStr(d);
+function addDays(date: Date, days: number) {
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
 }
 
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-export default function DateBrowser({ selectedDate, onDateSelect, taskCountsByDate, todayStr }: DateBrowserProps) {
-  const [weekMonday, setWeekMonday] = useState(() => getMondayOf(todayStr));
+export default function DateBrowser({ selectedDate, onDateSelect, taskCountsByDate }: DateBrowserProps) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = toLocalDateStr(today);
 
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekMonday, i));
+  // weekStart: Monday of the currently shown week
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    const d = new Date(today);
+    const day = d.getDay(); // 0=Sun
+    d.setDate(d.getDate() - ((day + 6) % 7)); // shift to Monday
+    return d;
+  });
 
-  const monthsInWeek = Array.from(new Set(days.map((d) => {
-    const dt = new Date(d + "T00:00:00");
-    return `${MONTH_NAMES[dt.getMonth()]} ${dt.getFullYear()}`;
-  })));
-  const headerLabel = monthsInWeek.join(" / ");
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
 
-  function prevWeek() { setWeekMonday((w) => addDays(w, -7)); }
-  function nextWeek() { setWeekMonday((w) => addDays(w, 7)); }
+  // Close picker on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
+        setShowPicker(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Build 7 days from weekStart
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+
+  function prevWeek() {
+    setWeekStart((w) => addDays(w, -7));
+  }
+
+  function nextWeek() {
+    setWeekStart((w) => addDays(w, 7));
+  }
 
   function jumpToToday() {
-    setWeekMonday(getMondayOf(todayStr));
+    const d = new Date(today);
+    const day = d.getDay();
+    d.setDate(d.getDate() - ((day + 6) % 7));
+    setWeekStart(d);
     onDateSelect(todayStr);
   }
 
+  function handleDayClick(dateStr: string) {
+    if (selectedDate === dateStr) {
+      onDateSelect(null); // deselect = show all
+    } else {
+      onDateSelect(dateStr);
+    }
+  }
+
+  // Month label for header
+  const monthsShown = Array.from(new Set(days.map((d) => `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`)));
+  const headerLabel = monthsShown.join(" / ");
+
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <Ionicons name="calendar-outline" size={13} color={colors.accent} />
-          <Text style={styles.monthLabel}>{headerLabel}</Text>
-        </View>
-        <View style={styles.headerRight}>
+    <div className="mb-6">
+      {/* Header row */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <CalendarDays size={14} style={{ color: "var(--accent)" }} />
+          <span className="text-sm font-medium" style={{ color: "var(--soft)" }}>
+            {headerLabel}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {/* Today button */}
           {selectedDate !== todayStr && (
-            <TouchableOpacity onPress={jumpToToday} style={styles.todayBtn}>
-              <Text style={styles.todayBtnText}>Today</Text>
-            </TouchableOpacity>
+            <button
+              onClick={jumpToToday}
+              className="text-xs px-2.5 py-1 rounded-lg transition-all"
+              style={{
+                background: "rgba(232,197,71,0.1)",
+                border: "1px solid rgba(232,197,71,0.25)",
+                color: "var(--accent)",
+              }}
+            >
+              Today
+            </button>
           )}
+
+          {/* Show All button */}
           {selectedDate !== null && (
-            <TouchableOpacity onPress={() => onDateSelect(null)} style={styles.allBtn}>
-              <Text style={styles.allBtnText}>All</Text>
-            </TouchableOpacity>
+            <button
+              onClick={() => onDateSelect(null)}
+              className="text-xs px-2.5 py-1 rounded-lg transition-all"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid var(--border)",
+                color: "var(--muted)",
+              }}
+            >
+              All tasks
+            </button>
           )}
-          <TouchableOpacity onPress={prevWeek} style={styles.navBtn}>
-            <Ionicons name="chevron-back" size={16} color={colors.muted} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={nextWeek} style={styles.navBtn}>
-            <Ionicons name="chevron-forward" size={16} color={colors.muted} />
-          </TouchableOpacity>
-        </View>
-      </View>
+
+          {/* Nav arrows */}
+          <button onClick={prevWeek} className="p-1 rounded-lg hover:bg-white/5 transition-colors" style={{ color: "var(--muted)" }}>
+            <ChevronLeft size={16} />
+          </button>
+          <button onClick={nextWeek} className="p-1 rounded-lg hover:bg-white/5 transition-colors" style={{ color: "var(--muted)" }}>
+            <ChevronRight size={16} />
+          </button>
+
+          {/* Date picker trigger */}
+          <div className="relative" ref={pickerRef}>
+            <button
+              onClick={() => setShowPicker((v) => !v)}
+              className="p-1 rounded-lg hover:bg-white/5 transition-colors"
+              style={{ color: showPicker ? "var(--accent)" : "var(--muted)" }}
+              title="Jump to date"
+            >
+              <CalendarDays size={15} />
+            </button>
+
+            {showPicker && (
+              <div
+                className="absolute right-0 top-8 z-50 rounded-xl p-3 animate-slide-down"
+                style={{
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
+                  boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+                  minWidth: "220px",
+                }}
+              >
+                <p className="text-xs mb-2" style={{ color: "var(--muted)" }}>Jump to date</p>
+                <input
+                  type="date"
+                  defaultValue={selectedDate || todayStr}
+                  className="input-field text-sm"
+                  style={{ padding: "0.5rem 0.75rem", colorScheme: "dark" }}
+                  onChange={(e) => {
+                    if (!e.target.value) return;
+                    const picked = new Date(e.target.value + "T00:00:00");
+                    // Move week to contain this date
+                    const day = picked.getDay();
+                    const monday = new Date(picked);
+                    monday.setDate(picked.getDate() - ((day + 6) % 7));
+                    setWeekStart(monday);
+                    onDateSelect(e.target.value);
+                    setShowPicker(false);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* Week strip */}
-      <View style={styles.weekStrip}>
-        {days.map((dateStr, i) => {
-          const dt = new Date(dateStr + "T00:00:00");
-          const today = new Date(todayStr + "T00:00:00");
+      <div
+        className="grid rounded-xl overflow-hidden"
+        style={{
+          gridTemplateColumns: "repeat(7, 1fr)",
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        {days.map((day, i) => {
+          const dateStr = toLocalDateStr(day);
           const isToday = dateStr === todayStr;
           const isSelected = dateStr === selectedDate;
-          const isPast = dt < today;
+          const isPast = day < today;
           const counts = taskCountsByDate[dateStr];
           const hasTasks = counts && counts.total > 0;
           const allDone = hasTasks && counts.completed === counts.total;
 
           return (
-            <TouchableOpacity
+            <button
               key={dateStr}
-              style={[
-                styles.dayCell,
-                isSelected && styles.dayCellSelected,
-                isToday && !isSelected && styles.dayCellToday,
-                i < 6 && styles.dayCellBorder,
-              ]}
-              onPress={() => onDateSelect(isSelected ? null : dateStr)}
-              activeOpacity={0.7}
+              onClick={() => handleDayClick(dateStr)}
+              className="flex flex-col items-center py-3 px-1 transition-all relative"
+              style={{
+                background: isSelected
+                  ? "rgba(232,197,71,0.12)"
+                  : isToday && !isSelected
+                  ? "rgba(232,197,71,0.04)"
+                  : "transparent",
+                borderRight: i < 6 ? "1px solid var(--border)" : "none",
+                cursor: "pointer",
+              }}
             >
-              <Text style={[
-                styles.dayLabel,
-                isSelected && styles.dayLabelSelected,
-                isToday && !isSelected && styles.dayLabelToday,
-                isPast && !isSelected && !isToday && styles.dayLabelPast,
-              ]}>
-                {DAY_LABELS[dt.getDay()]}
-              </Text>
+              {/* Day label */}
+              <span
+                className="text-xs mb-1.5 font-medium"
+                style={{
+                  color: isSelected
+                    ? "var(--accent)"
+                    : isToday
+                    ? "var(--accent)"
+                    : isPast
+                    ? "var(--border)"
+                    : "var(--muted)",
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: "0.65rem",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                {DAY_LABELS[day.getDay()]}
+              </span>
 
-              <View style={[
-                styles.dateCircle,
-                isSelected && styles.dateCircleSelected,
-                isToday && !isSelected && styles.dateCircleToday,
-              ]}>
-                <Text style={[
-                  styles.dateNum,
-                  isSelected && styles.dateNumSelected,
-                  isToday && !isSelected && styles.dateNumToday,
-                  isPast && !isSelected && !isToday && styles.dateNumPast,
-                ]}>
-                  {dt.getDate()}
-                </Text>
-              </View>
+              {/* Date number */}
+              <span
+                className="w-7 h-7 flex items-center justify-center rounded-full text-sm font-semibold transition-all"
+                style={{
+                  background: isSelected
+                    ? "var(--accent)"
+                    : isToday && !isSelected
+                    ? "rgba(232,197,71,0.15)"
+                    : "transparent",
+                  color: isSelected
+                    ? "var(--obsidian)"
+                    : isToday
+                    ? "var(--accent)"
+                    : isPast
+                    ? "var(--border)"
+                    : "var(--soft)",
+                  border: isToday && !isSelected ? "1px solid rgba(232,197,71,0.4)" : "none",
+                }}
+              >
+                {day.getDate()}
+              </span>
 
-              <View style={styles.dotRow}>
+              {/* Task dots */}
+              <div className="mt-1.5 h-3 flex items-center justify-center gap-0.5">
                 {hasTasks ? (
                   allDone ? (
-                    <Text style={styles.checkMark}>✓</Text>
+                    <span style={{ color: "var(--success)", fontSize: "0.6rem" }}>✓</span>
                   ) : (
-                    Array.from({ length: Math.min(counts.total - counts.completed, 3) }).map((_, j) => (
-                      <View key={j} style={[styles.dot, isSelected && styles.dotSelected]} />
-                    ))
+                    <>
+                      {Array.from({ length: Math.min(counts.total - counts.completed, 3) }).map((_, j) => (
+                        <span
+                          key={j}
+                          className="rounded-full"
+                          style={{
+                            width: "4px",
+                            height: "4px",
+                            background: isSelected ? "var(--accent)" : "var(--muted)",
+                          }}
+                        />
+                      ))}
+                    </>
                   )
-                ) : <View style={styles.dotPlaceholder} />}
-              </View>
-            </TouchableOpacity>
+                ) : (
+                  <span style={{ width: "4px", height: "4px" }} />
+                )}
+              </div>
+            </button>
           );
         })}
-      </View>
+      </div>
 
       {/* Selected date label */}
       {selectedDate && (
-        <View style={styles.selectedLabel}>
-          <View style={styles.divider} />
-          <Text style={styles.selectedText}>
-            {selectedDate === todayStr ? "Today"
-              : selectedDate === addDays(todayStr, 1) ? "Tomorrow"
-              : selectedDate === addDays(todayStr, -1) ? "Yesterday"
+        <div className="mt-3 flex items-center gap-2 animate-fade-in">
+          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+          <span className="text-xs px-2" style={{ color: "var(--muted)" }}>
+            {selectedDate === todayStr
+              ? "Today"
+              : selectedDate === toLocalDateStr(addDays(today, 1))
+              ? "Tomorrow"
+              : selectedDate === toLocalDateStr(addDays(today, -1))
+              ? "Yesterday"
               : new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", {
-                  weekday: "long", month: "long", day: "numeric"
+                  weekday: "long",
+                  month: "long",
+                  day: "numeric",
                 })}
-          </Text>
-          <View style={styles.divider} />
-        </View>
+          </span>
+          <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+        </div>
       )}
-    </View>
+    </div>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { marginBottom: spacing.lg },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.sm },
-  headerLeft: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  monthLabel: { fontSize: fontSize.sm, color: colors.soft, fontWeight: "500" },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  todayBtn: {
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.full,
-    backgroundColor: "rgba(232,197,71,0.1)", borderWidth: 1, borderColor: "rgba(232,197,71,0.25)",
-  },
-  todayBtnText: { fontSize: fontSize.xs, color: colors.accent, fontWeight: "600" },
-  allBtn: {
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.full,
-    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-  },
-  allBtnText: { fontSize: fontSize.xs, color: colors.muted },
-  navBtn: {
-    width: 28, height: 28, borderRadius: radius.sm,
-    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.border,
-    alignItems: "center", justifyContent: "center",
-  },
-  weekStrip: {
-    flexDirection: "row",
-    backgroundColor: colors.card, borderRadius: radius.md,
-    borderWidth: 1, borderColor: colors.border,
-    overflow: "hidden",
-  },
-  dayCell: {
-    flex: 1, paddingVertical: 10, alignItems: "center", gap: 4,
-    backgroundColor: "transparent",
-  },
-  dayCellSelected: { backgroundColor: "rgba(232,197,71,0.12)" },
-  dayCellToday: { backgroundColor: "rgba(232,197,71,0.04)" },
-  dayCellBorder: { borderRightWidth: 1, borderRightColor: colors.border },
-  dayLabel: { fontSize: 9, color: colors.muted, fontFamily: "monospace", letterSpacing: 0.5 },
-  dayLabelSelected: { color: colors.accent },
-  dayLabelToday: { color: colors.accent },
-  dayLabelPast: { color: colors.border },
-  dateCircle: { width: 26, height: 26, borderRadius: 13, alignItems: "center", justifyContent: "center" },
-  dateCircleSelected: { backgroundColor: colors.accent },
-  dateCircleToday: { backgroundColor: "rgba(232,197,71,0.15)", borderWidth: 1, borderColor: "rgba(232,197,71,0.4)" },
-  dateNum: { fontSize: fontSize.sm, fontWeight: "600", color: colors.soft },
-  dateNumSelected: { color: colors.obsidian },
-  dateNumToday: { color: colors.accent },
-  dateNumPast: { color: colors.border },
-  dotRow: { height: 8, flexDirection: "row", alignItems: "center", gap: 2 },
-  dot: { width: 4, height: 4, borderRadius: 2, backgroundColor: colors.muted },
-  dotSelected: { backgroundColor: colors.accent },
-  dotPlaceholder: { width: 4, height: 4 },
-  checkMark: { fontSize: 9, color: colors.success },
-  selectedLabel: { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: spacing.sm },
-  divider: { flex: 1, height: 1, backgroundColor: colors.border },
-  selectedText: { fontSize: fontSize.xs, color: colors.muted },
-});

@@ -11,3 +11,6 @@ export interface Todo {
   category?: string;
   created_at: string;
 }
+
+export type FilterType = "all" | "active" | "completed" | "overdue";
+export type SortType = "created_at" | "due_date" | "priority";
