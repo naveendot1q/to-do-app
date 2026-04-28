@@ -26,19 +26,14 @@
 
 html,
 body {
-  background-color: var(--obsidian); /* fallback only */
+  background-color: transparent;
   color: var(--soft);
   font-family: "DM Sans", sans-serif;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Allow dynamic background to show through */
-#__next,
-main {
-  position: relative;
-  z-index: 10;
-}
+
 
 /* Scrollbar */
 ::-webkit-scrollbar {
