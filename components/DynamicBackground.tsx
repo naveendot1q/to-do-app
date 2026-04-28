@@ -3,95 +3,89 @@
 import { useEffect, useState } from "react";
 import { AppMood } from "@/lib/types";
 
-interface Props {
-  mood: AppMood;
-}
-
 const moodConfig = {
   calm: {
-    // All done or no tasks — deep peaceful obsidian
-    gradient: "radial-gradient(ellipse at 20% 50%, rgba(100,80,200,0.06) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(232,197,71,0.04) 0%, transparent 60%)",
-    gridColor: "rgba(232,197,71,0.02)",
-    label: null,
+    gradient: "radial-gradient(ellipse at 20% 50%, rgba(100,80,200,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 20%, rgba(232,197,71,0.05) 0%, transparent 60%)",
+    grid: "rgba(232,197,71,0.025)",
+    pulse: false,
   },
   success: {
-    // Everything completed — soft green glow
-    gradient: "radial-gradient(ellipse at 30% 40%, rgba(46,213,115,0.07) 0%, transparent 55%), radial-gradient(ellipse at 70% 70%, rgba(46,213,115,0.04) 0%, transparent 50%)",
-    gridColor: "rgba(46,213,115,0.025)",
-    label: null,
+    gradient: "radial-gradient(ellipse at 30% 40%, rgba(46,213,115,0.10) 0%, transparent 55%), radial-gradient(ellipse at 70% 70%, rgba(46,213,115,0.05) 0%, transparent 50%)",
+    grid: "rgba(46,213,115,0.03)",
+    pulse: false,
   },
   warning: {
-    // Some tasks pending/active — warm amber
-    gradient: "radial-gradient(ellipse at 15% 60%, rgba(255,165,2,0.08) 0%, transparent 55%), radial-gradient(ellipse at 85% 30%, rgba(232,197,71,0.06) 0%, transparent 55%)",
-    gridColor: "rgba(255,165,2,0.025)",
-    label: null,
+    gradient: "radial-gradient(ellipse at 15% 60%, rgba(255,165,2,0.10) 0%, transparent 55%), radial-gradient(ellipse at 85% 30%, rgba(232,197,71,0.08) 0%, transparent 55%)",
+    grid: "rgba(255,165,2,0.03)",
+    pulse: false,
   },
   critical: {
-    // Overdue tasks — urgent red pulse
-    gradient: "radial-gradient(ellipse at 50% 30%, rgba(255,71,87,0.09) 0%, transparent 55%), radial-gradient(ellipse at 20% 80%, rgba(255,71,87,0.05) 0%, transparent 50%)",
-    gridColor: "rgba(255,71,87,0.025)",
-    label: null,
+    gradient: "radial-gradient(ellipse at 50% 30%, rgba(255,71,87,0.12) 0%, transparent 55%), radial-gradient(ellipse at 20% 80%, rgba(255,71,87,0.06) 0%, transparent 50%)",
+    grid: "rgba(255,71,87,0.03)",
+    pulse: true,
   },
 };
 
-export default function DynamicBackground({ mood }: Props) {
-  const [prev, setPrev] = useState<AppMood>(mood);
-  const [current, setCurrent] = useState<AppMood>(mood);
-  const [opacity, setOpacity] = useState(1);
+export default function DynamicBackground({ mood }: { mood: AppMood }) {
+  const [displayed, setDisplayed] = useState<AppMood>(mood);
+  const [fading, setFading] = useState(false);
 
   useEffect(() => {
-    if (mood === current) return;
-    // Crossfade transition
-    setOpacity(0);
+    if (mood === displayed) return;
+    setFading(true);
     const t = setTimeout(() => {
-      setPrev(current);
-      setCurrent(mood);
-      setOpacity(1);
-    }, 400);
+      setDisplayed(mood);
+      setFading(false);
+    }, 600);
     return () => clearTimeout(t);
   }, [mood]);
 
-  const cfg = moodConfig[current];
+  const cfg = moodConfig[displayed];
 
   return (
     <>
-      {/* Base background */}
-      <div style={{ position: "fixed", inset: 0, background: "#0a0a0f", zIndex: 0 }} />
+      {/* Base — always solid obsidian */}
+      <div style={{
+        position: "fixed", inset: 0, zIndex: 0,
+        backgroundColor: "#0a0a0f",
+        pointerEvents: "none",
+      }} />
 
-      {/* Mood gradient — transitions smoothly */}
+      {/* Mood gradient layer */}
       <div style={{
         position: "fixed", inset: 0, zIndex: 1,
         background: cfg.gradient,
-        opacity,
-        transition: "opacity 0.8s ease",
+        opacity: fading ? 0 : 1,
+        transition: "opacity 0.8s ease, background 0.8s ease",
         pointerEvents: "none",
       }} />
 
-      {/* Grid overlay */}
+      {/* Grid */}
       <div style={{
         position: "fixed", inset: 0, zIndex: 2,
-        backgroundImage: `linear-gradient(${cfg.gridColor} 1px, transparent 1px), linear-gradient(90deg, ${cfg.gridColor} 1px, transparent 1px)`,
+        backgroundImage: `linear-gradient(${cfg.grid} 1px, transparent 1px), linear-gradient(90deg, ${cfg.grid} 1px, transparent 1px)`,
         backgroundSize: "80px 80px",
-        pointerEvents: "none",
-        opacity,
+        opacity: fading ? 0 : 1,
         transition: "opacity 0.8s ease",
+        pointerEvents: "none",
       }} />
 
-      {/* Critical pulse ring — only for overdue */}
-      {current === "critical" && (
+      {/* Critical top pulse bar */}
+      {displayed === "critical" && !fading && (
         <div style={{
           position: "fixed", top: 0, left: 0, right: 0, height: 3, zIndex: 3,
-          background: "linear-gradient(90deg, transparent, rgba(255,71,87,0.6), rgba(255,71,87,0.9), rgba(255,71,87,0.6), transparent)",
+          background: "linear-gradient(90deg, transparent 0%, rgba(255,71,87,0.8) 50%, transparent 100%)",
           animation: "shimmer 2s infinite",
+          pointerEvents: "none",
         }} />
       )}
 
-      {/* Noise texture */}
+      {/* Noise grain */}
       <div style={{
         position: "fixed", inset: 0, zIndex: 3,
-        backgroundImage: "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E\")",
+        backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E")`,
         pointerEvents: "none",
-        opacity: 0.4,
+        opacity: 0.5,
       }} />
     </>
   );
